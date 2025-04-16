@@ -243,11 +243,39 @@ class KTWP_GitHub_Plugin_Pusher {
             return;
         }
         
-        // Push changes
-        exec('git push 2>&1', $push_output, $push_return);
+        // Debug remote configuration
+        exec('git remote -v 2>&1', $remote_check_output, $remote_check_return);
+        $has_remote = !empty($remote_check_output);
+        
+        // Ensure we're on a valid branch (default to main if needed)
+        exec('git symbolic-ref --short HEAD 2>&1', $branch_name_output, $branch_name_return);
+        $current_branch = ($branch_name_return === 0 && !empty($branch_name_output)) ? $branch_name_output[0] : 'master';
+        
+        // Get remote branches if remote exists
+        if ($has_remote) {
+            exec('git branch -r 2>&1', $remote_branches_output, $remote_branches_return);
+            $remote_branches = implode("\n", $remote_branches_output);
+            
+            // Set upstream if needed
+            if (strpos($remote_branches, 'origin/' . $current_branch) !== false) {
+                // Remote branch exists, set upstream
+                exec('git branch --set-upstream-to=origin/' . $current_branch . ' ' . $current_branch . ' 2>&1', $set_upstream_output, $set_upstream_return);
+            } else if (strpos($remote_branches, 'origin/main') !== false && $current_branch !== 'main') {
+                // We're on a non-main branch but remote has main - switch to main
+                exec('git checkout -b main 2>&1', $checkout_output, $checkout_return);
+                $current_branch = 'main';
+                exec('git branch --set-upstream-to=origin/main main 2>&1', $set_upstream_output, $set_upstream_return);
+            }
+        }
+        
+        // Push changes with -u flag to set upstream if needed
+        exec('git push -u origin ' . $current_branch . ' 2>&1', $push_output, $push_return);
+        $debug_info = "Remote config: " . implode("\n", $remote_check_output) . "\nPush output: " . implode("\n", $push_output);
+        
         if ($push_return !== 0) {
             // If push failed, check if it's because remote is not configured
-            if (strpos(implode("\n", $push_output), 'No configured push destination') !== false ||
+            if (!$has_remote ||
+                strpos(implode("\n", $push_output), 'No configured push destination') !== false ||
                 strpos(implode("\n", $push_output), 'no upstream branch') !== false) {
                 // Remote not configured - try to create the repository
                 $repo_name = 'ktwp-wp-plugin-' . str_replace('ktwp-', '', basename($plugin_dir));
@@ -266,7 +294,17 @@ class KTWP_GitHub_Plugin_Pusher {
                         if ($create_return === 0) {
                             // Successfully created repo
                             exec('git remote add origin "https://github.com/$(gh api user | grep -o \'\"login\":\"[^\"]*\"\' | sed \'s/\"login\":\"//;s/\"//g\')/' . $repo_name . '.git" 2>&1', $remote_output, $remote_return);
-                            exec('git branch -M main 2>&1', $branch_output, $branch_return);
+                            
+                            // Get current branch
+                            exec('git symbolic-ref --short HEAD 2>&1', $curr_branch_output, $curr_branch_return);
+                            $curr_branch = ($curr_branch_return === 0 && !empty($curr_branch_output)) ? $curr_branch_output[0] : 'master';
+                            
+                            // Rename current branch to main if not already main
+                            if ($curr_branch !== 'main') {
+                                exec('git branch -M main 2>&1', $branch_output, $branch_return);
+                            }
+                            
+                            // Push with upstream tracking
                             exec('git push -u origin main 2>&1', $init_push_output, $init_push_return);
                             
                             if ($init_push_return === 0) {
@@ -329,10 +367,20 @@ class KTWP_GitHub_Plugin_Pusher {
         // Restore original directory
         chdir($current_dir);
         
+        // Get the remote URL
+        exec('git -C ' . escapeshellarg($plugin_dir) . ' remote get-url origin 2>&1', $remote_url_output, $remote_url_return);
+        $remote_url = !empty($remote_url_output) ? $remote_url_output[0] : 'Unknown';
+        
+        // Convert HTTPS URL to web URL
+        $repo_web_url = $remote_url;
+        if (preg_match('#https://github.com/([^/]+)/([^/.]+)\.git#', $remote_url, $matches)) {
+            $repo_web_url = "https://github.com/{$matches[1]}/{$matches[2]}";
+        }
+        
         // Send success response
         wp_send_json_success(array(
-            'message' => 'Changes successfully pushed to GitHub.',
-            'details' => implode("\n", array_merge($commit_output, $push_output))
+            'message' => 'Changes successfully pushed to GitHub. <a href="' . esc_url($repo_web_url) . '" target="_blank">View Repository</a>',
+            'details' => $debug_info . "\n\nCommit: " . implode("\n", $commit_output) . "\nRemote URL: " . $remote_url
         ));
     }
 }
