@@ -1,17 +1,20 @@
 # KupieTools GitHub Plugin Pusher
 
-A specialized WordPress plugin that adds a "Push to GitHub" button directly to the plugin editor page, allowing for seamless integration between WordPress development and GitHub repositories.
+A specialized WordPress plugin that adds a "Push to GitHub" button directly to the plugin editor page, allowing for seamless integration between WordPress development and GitHub repositories. It can even automatically create GitHub repositories for new plugins.
 
 ## Features
 
 - Adds a "Push to GitHub" button at the bottom of the WordPress plugin editor
 - Only appears for plugins that are already Git repositories
+- Automatically creates GitHub repositories for plugins that don't have one
+- Shows helpful warnings if GitHub CLI isn't installed or authenticated
 - Simple, intuitive interface for committing and pushing changes
 - Real-time feedback with success/error messages
 - Handles the entire Git workflow (add, commit, push) with a single click
 - Secure implementation with WordPress nonces
 - Clean, WordPress-style UI that integrates with the admin interface
 - Minimal setup required - works out-of-the-box
+- Handles "dubious ownership" Git errors automatically
 
 ## How It Works
 
@@ -19,7 +22,9 @@ A specialized WordPress plugin that adds a "Push to GitHub" button directly to t
 2. If it is, a "Push to GitHub" section appears at the bottom of the editor
 3. Enter a commit message describing your changes
 4. Click the button to instantly add, commit, and push your changes to GitHub
-5. Receive immediate feedback on the success or failure of the operation
+5. If the plugin has no GitHub remote configured, it automatically creates a new GitHub repository using GitHub CLI
+6. Receive immediate feedback on the success or failure of the operation
+7. If any issues occur, detailed error messages guide you through fixing them
 
 ## Technical Implementation
 
@@ -35,7 +40,8 @@ A specialized WordPress plugin that adds a "Push to GitHub" button directly to t
 - WordPress 5.0 or higher
 - Git must be installed on the server
 - The web server user must have permission to execute Git commands
-- The plugin directory must already be a Git repository with remote configured
+- GitHub CLI (gh) for automatic repository creation (optional but recommended)
+- The plugin directory must already be a Git repository (remote configuration is optional)
 
 ## Installation
 

@@ -22,6 +22,37 @@ class KTWP_GitHub_Plugin_Pusher {
         
         // Handle the AJAX request for pushing to GitHub
         add_action('wp_ajax_ktwp_push_to_github', array($this, 'push_to_github'));
+        
+        // Add admin notice if GitHub CLI is not installed or authenticated
+        add_action('admin_notices', array($this, 'check_github_cli'));
+    }
+    
+    /**
+     * Check if GitHub CLI is installed and authenticated
+     */
+    public function check_github_cli() {
+        // Only show on plugin editor page
+        $screen = get_current_screen();
+        if (!$screen || $screen->id !== 'plugin-editor') {
+            return;
+        }
+        
+        // Check for GitHub CLI
+        exec('which gh 2>&1', $gh_output, $gh_return);
+        if ($gh_return !== 0) {
+            echo '<div class="notice notice-warning is-dismissible">';
+            echo '<p><strong>GitHub Plugin Pusher:</strong> GitHub CLI not installed. Install it to enable automatic repository creation.</p>';
+            echo '</div>';
+            return;
+        }
+        
+        // Check if authenticated
+        exec('gh auth status 2>&1', $auth_output, $auth_return);
+        if ($auth_return !== 0) {
+            echo '<div class="notice notice-warning is-dismissible">';
+            echo '<p><strong>GitHub Plugin Pusher:</strong> GitHub CLI not authenticated. Run <code>gh auth login</code> in your terminal to enable automatic repository creation.</p>';
+            echo '</div>';
+        }
     }
     
     /**
@@ -218,12 +249,67 @@ class KTWP_GitHub_Plugin_Pusher {
             // If push failed, check if it's because remote is not configured
             if (strpos(implode("\n", $push_output), 'No configured push destination') !== false ||
                 strpos(implode("\n", $push_output), 'no upstream branch') !== false) {
-                // No remote configured, provide detailed error
+                // Remote not configured - try to create the repository
+                $repo_name = 'ktwp-wp-plugin-' . str_replace('ktwp-', '', basename($plugin_dir));
+                
+                // Try to create GitHub repo using GitHub CLI if available
+                exec('which gh 2>&1', $gh_output, $gh_return);
+                if ($gh_return === 0) {
+                    // GitHub CLI is available
+                    $desc = "WordPress plugin: " . basename($plugin_dir);
+                    exec('gh auth status 2>&1', $auth_output, $auth_return);
+                    
+                    if ($auth_return === 0) {
+                        // GitHub CLI is authenticated
+                        exec('gh repo create "' . $repo_name . '" --public --description "' . $desc . '" 2>&1', $create_output, $create_return);
+                        
+                        if ($create_return === 0) {
+                            // Successfully created repo
+                            exec('git remote add origin "https://github.com/$(gh api user | grep -o \'\"login\":\"[^\"]*\"\' | sed \'s/\"login\":\"//;s/\"//g\')/' . $repo_name . '.git" 2>&1', $remote_output, $remote_return);
+                            exec('git branch -M main 2>&1', $branch_output, $branch_return);
+                            exec('git push -u origin main 2>&1', $init_push_output, $init_push_return);
+                            
+                            if ($init_push_return === 0) {
+                                // Push succeeded
+                                chdir($current_dir);
+                                wp_send_json_success(array(
+                                    'message' => 'Successfully created GitHub repository and pushed changes.',
+                                    'details' => implode("\n", array_merge($create_output, $remote_output, $init_push_output))
+                                ));
+                                return;
+                            } else {
+                                // Push failed
+                                chdir($current_dir);
+                                wp_send_json_error(array(
+                                    'message' => 'Created GitHub repository but failed to push. Try manually:<br>' .
+                                                 '<code>cd ' . esc_html($plugin_dir) . '<br>' .
+                                                 'git push -u origin main</code>',
+                                    'details' => implode("\n", $init_push_output)
+                                ));
+                                return;
+                            }
+                        } else {
+                            // Failed to create repository
+                            $error_msg = 'Failed to create GitHub repository.';
+                            if (strpos(implode("\n", $create_output), 'already exists') !== false) {
+                                $error_msg = 'Repository already exists. Try connecting to it manually.';
+                            }
+                        }
+                    } else {
+                        // GitHub CLI not authenticated
+                        $error_msg = 'GitHub CLI not authenticated. Run <code>gh auth login</code> in your terminal.';
+                    }
+                } else {
+                    // GitHub CLI not available
+                    $error_msg = 'GitHub CLI not installed. Install it to automate repository creation.';
+                }
+                
+                // If we get here, something went wrong with the GitHub CLI approach
                 chdir($current_dir);
                 wp_send_json_error(array(
-                    'message' => 'GitHub remote not configured. Please run these commands in your terminal:<br>' .
+                    'message' => $error_msg . '<br>Alternatively, set up manually:<br>' .
                                  '<code>cd ' . esc_html($plugin_dir) . '<br>' .
-                                 'git remote add origin https://github.com/YOUR-USERNAME/REPO-NAME.git<br>' .
+                                 'git remote add origin https://github.com/YOUR-USERNAME/' . $repo_name . '.git<br>' .
                                  'git branch -M main<br>' .
                                  'git push -u origin main</code>',
                     'details' => implode("\n", $push_output)
