@@ -165,12 +165,24 @@ class KTWP_GitHub_Plugin_Pusher {
             return;
         }
         
+        // Mark the directory as safe for git (avoid dubious ownership errors)
+        exec('git config --global --add safe.directory "' . $plugin_dir . '"');
+        
         // Change to plugin directory
         $current_dir = getcwd();
         chdir($plugin_dir);
         
         // Check for changes
-        exec('git status --porcelain', $status_output, $status_return);
+        exec('git status --porcelain 2>&1', $status_output, $status_return);
+        if ($status_return !== 0) {
+            chdir($current_dir);
+            wp_send_json_error(array(
+                'message' => 'Failed to check Git status.',
+                'details' => implode("\n", $status_output)
+            ));
+            return;
+        }
+        
         if (empty($status_output)) {
             chdir($current_dir);
             wp_send_json_success(array('message' => 'No changes to commit.'));
@@ -178,27 +190,53 @@ class KTWP_GitHub_Plugin_Pusher {
         }
         
         // Add all changes
-        exec('git add .', $add_output, $add_return);
+        exec('git add . 2>&1', $add_output, $add_return);
         if ($add_return !== 0) {
             chdir($current_dir);
-            wp_send_json_error(array('message' => 'Failed to stage changes.'));
+            wp_send_json_error(array(
+                'message' => 'Failed to stage changes.',
+                'details' => implode("\n", $add_output)
+            ));
             return;
         }
         
         // Commit changes
         $safe_commit_message = str_replace('"', '\"', $commit_message);
-        exec('git commit -m "' . $safe_commit_message . '"', $commit_output, $commit_return);
+        exec('git commit -m "' . $safe_commit_message . '" 2>&1', $commit_output, $commit_return);
         if ($commit_return !== 0) {
             chdir($current_dir);
-            wp_send_json_error(array('message' => 'Failed to commit changes.'));
+            wp_send_json_error(array(
+                'message' => 'Failed to commit changes.',
+                'details' => implode("\n", $commit_output)
+            ));
             return;
         }
         
         // Push changes
-        exec('git push', $push_output, $push_return);
+        exec('git push 2>&1', $push_output, $push_return);
         if ($push_return !== 0) {
+            // If push failed, check if it's because remote is not configured
+            if (strpos(implode("\n", $push_output), 'No configured push destination') !== false ||
+                strpos(implode("\n", $push_output), 'no upstream branch') !== false) {
+                // No remote configured, provide detailed error
+                chdir($current_dir);
+                wp_send_json_error(array(
+                    'message' => 'GitHub remote not configured. Please run these commands in your terminal:<br>' .
+                                 '<code>cd ' . esc_html($plugin_dir) . '<br>' .
+                                 'git remote add origin https://github.com/YOUR-USERNAME/REPO-NAME.git<br>' .
+                                 'git branch -M main<br>' .
+                                 'git push -u origin main</code>',
+                    'details' => implode("\n", $push_output)
+                ));
+                return;
+            }
+            
+            // Other push error
             chdir($current_dir);
-            wp_send_json_error(array('message' => 'Failed to push changes to GitHub.'));
+            wp_send_json_error(array(
+                'message' => 'Failed to push changes to GitHub: ' . implode("\n", $push_output),
+                'details' => implode("\n", $push_output)
+            ));
             return;
         }
         
