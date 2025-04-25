@@ -1,6 +1,14 @@
 # KupieTools GitHub Plugin Pusher
 
-A specialized WordPress plugin that adds a "Push to GitHub" button directly to the plugin editor page, allowing for seamless integration between WordPress development and GitHub repositories. It can even automatically create GitHub repositories for new plugins.
+A specialized WordPress plugin that adds a "Push to GitHub" (and "Pull From Github", if there are remote changes that haven't been made locally) button directly to the plugin editor page, allowing for seamless integration between WordPress development and GitHub repositories. It can even automatically create GitHub repositories for new plugins.
+
+# Caution
+
+This currently works with the author's setup for the author's use, but it may be hinky. WordPress isn't a Git client. This plugin could ruin your whole day. Make sure you always have your plugins backed up elsewhere for safety. Try to always make changes in either WordPress or on Github, *not* both, or bad things may happen. 
+
+Also, this is not "plug and play", it has not been productized and may still contain settings hard-coded to the author's setup. If you want to play with this you will need to use your brain. 
+
+For instance, as of this writing, I believe I still have it hard-coded to only work for plugins with the "ktwp-" prefix, for starters... I haven't even looked lately. As this suits my personal use, I may change it at some point, or I may not. Things like this are where your brain will come in. 
 
 ## Features
 
