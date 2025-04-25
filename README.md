@@ -10,6 +10,8 @@ Also, this is not "plug and play", it has not been productized and may still con
 
 For instance, as of this writing, I believe I still have it hard-coded to only work for plugins with the "ktwp-" prefix, for starters... I haven't even looked lately. As this suits my personal use, I may change it at some point, or I may not. Things like this are where your brain will come in. 
 
+Obviously, and I don't see why this should happen, but if someone wants to use this and spends some time making it more flexible and customizable, I'd be willing to consider merging such positive changes into this repo. If you want to add settable user options in the WP Admin area, the big thing to look at would be other repos of mine, such as https://github.com/kupietools/ktwp-wp-plugin-caching-toolkit or https://github.com/kupietools/ktwp-wp-plugin-editor-developerlog, which add their settings to a "Kupietools" settings page, and copy that technique. That's how that sort of thing will be implemented for this plugin if get around to it. 
+
 ## Features
 
 - Adds a "Push to GitHub" button at the bottom of the WordPress plugin editor
